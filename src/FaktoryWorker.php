@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare (strict_types = 1);
 
 namespace BaseKit\Faktory;
 
@@ -7,86 +7,111 @@ use Psr\Log\LoggerInterface;
 
 class FaktoryWorker
 {
-    /**
-     * @var FaktoryClient
-     */
-    private $client;
+  /**
+   * @var FaktoryClient
+   */
+  private $client;
 
-    /**
-     * @var LoggerInterface
-     */
-    private $logger;
+  /**
+   * @var array
+   */
+  private $jobTypes = [];
 
-    /**
-     * @var array
-     */
-    private $queues = [];
+  /**
+   * @var int
+   */
+  private $lastBeat;
 
-    /**
-     * @var array
-     */
-    private $jobTypes = [];
+  /**
+   * @var LoggerInterface
+   */
+  private $logger;
 
-    /**
-     * @var bool
-     */
-    private $stop = false;
+  /**
+   * @var array
+   */
+  private $queues = [];
 
-    public function __construct(FaktoryClient $client, LoggerInterface $logger)
-    {
-        $this->client = $client;
-        $this->logger = $logger;
-    }
+  /**
+   * @var bool
+   */
+  private $stop = false;
 
-    public function setQueues(array $queues) : void
-    {
-        $this->queues = $queues;
-    }
+  /**
+   * @param FaktoryClient $client
+   * @param LoggerInterface $logger
+   */
+  public function __construct(FaktoryClient $client, LoggerInterface $logger)
+  {
+    $this->client = $client;
+    $this->logger = $logger;
+    $this->client->connect();
+  }
 
-    public function register(string $jobType, callable $callable) : void
-    {
-        $this->jobTypes[$jobType] = $callable;
-    }
+  /**
+   * @param string $jobType
+   * @param $callable
+   */
+  public function register(string $jobType, callable $callable): void
+  {
+    $this->jobTypes[$jobType] = $callable;
+  }
 
-    public function run(bool $daemonize = false) : void
-    {
-        pcntl_async_signals(true);
+  /**
+   * @param bool $daemonize
+   */
+  public function run(bool $daemonize = false): void
+  {
+    pcntl_async_signals(true);
 
-        pcntl_signal(SIGTERM, function ($signo) {
+    pcntl_signal(SIGTERM, function ($signo) {
+      exit(0);
+    });
+
+    pcntl_signal(SIGINT, function ($signo) {
+      exit(0);
+    });
+
+    do {
+      if (!$this->lastBeat || ($this->lastBeat + 15) < time()) {
+        $response = $this->client->beat();
+        $this->lastBeat = time();
+      }
+
+      $job = $this->client->fetch($this->queues);
+
+      if ($job !== null) {
+        $this->logger->debug($job['jid']);
+
+        $callable = $this->jobTypes[$job['jobtype']];
+
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+          throw new \Exception('Could not fork');
+        }
+
+        if ($pid > 0) {
+          pcntl_wait($status);
+        } else {
+          try {
+            call_user_func($callable, $job);
+            $this->client->ack($job['jid']);
+          } catch (\Exception $e) {
+            $this->client->fail($job['jid']);
+          } finally {
             exit(0);
-        });
+          }
+        }
+      }
+      usleep(100);
+    } while ($daemonize && !$this->stop);
+  }
 
-        pcntl_signal(SIGINT, function ($signo) {
-            exit(0);
-        });
-
-        do {
-            $job = $this->client->fetch($this->queues);
-
-            if ($job !== null) {
-                $this->logger->debug($job['jid']);
-
-                $callable = $this->jobTypes[$job['jobtype']];
-
-                $pid = pcntl_fork();
-                if ($pid === -1) {
-                    throw new \Exception('Could not fork');
-                }
-
-                if ($pid > 0) {
-                    pcntl_wait($status);
-                } else {
-                    try {
-                        call_user_func($callable, $job);
-                        $this->client->ack($job['jid']);
-                    } catch (\Exception $e) {
-                        $this->client->fail($job['jid']);
-                    } finally {
-                        exit(0);
-                    }
-                }
-            }
-            usleep(100);
-        } while($daemonize && !$this->stop);
-    }
+  /**
+   * @param array $queues
+   */
+  public function setQueues(array $queues): void
+  {
+    $this->queues = $queues;
+  }
 }

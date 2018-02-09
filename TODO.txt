@@ -1,0 +1,44 @@
+REFERENCES
+  https://github.com/jbielick/faktory-client/blob/master/lib/client.js
+  https://github.com/contribsys/faktory_worker_ruby/tree/master/lib/faktory
+  https://github.com/contribsys/faktory_worker_go
+
+- payload options
+  - queue
+  - priority
+  - reserve_for
+  - at
+  - retry
+  - backtrace
+  - custom { hash }
+
+- pass error message on failure
+  - errType, message, backtrace
+
+- support authentication
+  - from HI connect string
+
+- connect
+  - version 2
+  - proper wid, hostname/pid, labels in connect
+
+- implement BEAT every 15 seconds
+  - call quiet or terminate based on results
+
+- implement quiet
+  - stop fetch
+  - call terminate
+
+- implement terminate
+  - time for cleanup (25 sec)
+  - send FAIL for any remaining jobs
+  - call END
+
+- implement INFO
+
+- implement END
+
+- trap signals?
+  SIGTERM - stop
+  SIGTSTP - quiet
+  SIGINT  - stop

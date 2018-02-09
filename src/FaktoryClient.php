@@ -4,100 +4,129 @@ namespace BaseKit\Faktory;
 
 class FaktoryClient
 {
-    /**
-     * @var string
-     */
-    private $faktoryHost;
+  /**
+   * @var socket
+   */
+  private $socket;
 
-    /**
-     * @var int
-     */
-    private $faktoryPort;
+  /**
+   * @param string $url
+   * @param int $timeout
+   */
+  public function __construct(string $url, int $timeout = 5)
+  {
+    $this->timeout = $timeout;
+    $this->url = parse_url($url);
+  }
 
-    public function __construct(string $faktoryHost, int $faktoryPort)
-    {
-        $this->faktoryHost = $faktoryHost;
-        $this->faktoryPort = $faktoryPort;
+  /**
+   * @param string $jobId
+   */
+  public function ack(string $jobId)
+  {
+    $this->writeLine('ACK', json_encode(['jid' => $jobId]));
+  }
+
+  public function beat()
+  {
+    $response = $this->writeLine('BEAT', '{"wid":"foo"}');
+    return (strpos($response, 0, 3) === '+OK') ? null : json_decode($response);
+  }
+
+  public function close()
+  {
+    if ($this->socket) {@fclose($this->socket);}
+  }
+
+  /**
+   * @return mixed
+   */
+  public function connect()
+  {
+    if ($this->socket) {return;}
+    $conn = $this->url['scheme'] . '://' . $this->url['host'] . ':' . $this->url['port'];
+    $this->socket = stream_socket_client($conn, $errno, $errstr, $this->timeout, STREAM_CLIENT_CONNECT);
+    if (!$this->socket) {
+      throw new \Exception("Connect Error: $errno - $errstr");
     }
 
-    public function push(FaktoryJob $job) : void
-    {
-        $socket = $this->connect();
-        $this->writeLine($socket, 'PUSH', json_encode($job));
-        $this->close($socket);
+    $response = $this->readLine();
+    if (substr($response, 0, 3) !== '+HI') {
+      throw new \Exception('Hi not received :(');
     }
 
-    public function fetch(array $queues)
-    {
-        $socket = $this->connect();
-        $response = $this->writeLine($socket, 'FETCH', implode(' ', $queues));
+    $params = json_decode(trim(substr($response, 4, strpos($response, PHP_EOL))));
+    $this->login($params);
+  }
 
-        $char = $response[0];
-        if ($char === '$') {
-            $count = trim(substr($response, 1, strpos($response, "\r\n")));
-            $data = null;
-            if ($count > 0) {
-                $data = substr($response, strlen($count) + 1);
-                $this->close($socket);
-                return json_decode($data, true);
-            }
+  /**
+   * @param string $jobId
+   */
+  public function fail(string $jobId)
+  {
+    $this->writeLine('FAIL', json_encode(['jid' => $jobId]));
+  }
 
-            return $data;
-        }
-
-        $this->close($socket);
-
-        return $response;
+  /**
+   * @param array $queues
+   * @return mixed
+   */
+  public function fetch(array $queues)
+  {
+    $response = $this->writeLine('FETCH', implode(' ', $queues));
+    $char = $response[0];
+    if ($char === '$') {
+      $count = trim(substr($response, 1, strpos($response, PHP_EOL)));
+      if ($count < 1) {return null;}
+      $data = $this->readLine();
+      return json_decode($data, true);
     }
+  }
 
-    public function ack(string $jobId) : void
-    {
-        $socket = $this->connect();
-        $this->writeLine($socket, 'ACK', json_encode(['jid' => $jobId]));
-        $this->close($socket);
+  /**
+   * @param FaktoryJob $job
+   */
+  public function push(FaktoryJob $job)
+  {
+    $this->writeLine('PUSH', json_encode($job));
+  }
+
+  /**
+   * @param array $params
+   * @return mixed
+   */
+  private function login($params = [])
+  {
+    // DO SOMETHING WITH PARAMS (eg: Authenticate)
+    $resp = $this->writeLine('HELLO', '{"wid":"foo","v":2}');
+    // validate data
+    if (substr($resp, 0, 3) !== '+OK') {
+      throw new \Exception('OK Not Received');
     }
+    return $resp;
+  }
 
-    public function fail(string $jobId) : void
-    {
-        $socket = $this->connect();
-        $this->writeLine($socket, 'FAIL', json_encode(['jid' => $jobId]));
-        $this->close($socket);
+  /**
+   * @return mixed
+   */
+  private function readLine()
+  {
+    $bytes = '';
+    while (!strpos($bytes, PHP_EOL)) {
+      $bytes .= fgets($this->socket, 1024);
     }
+    return $bytes;
+  }
 
-    private function connect()
-    {
-        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-        socket_connect($socket, $this->faktoryHost, $this->faktoryPort);
-
-        $response = $this->readLine($socket);
-
-        if ($response !== "+HI {\"v\":\"1\"}\r\n") {
-            throw new \Exception('Hi not received :(');
-        }
-
-        $this->writeLine($socket, 'HELLO', '{"wid":"foo"}');
-        return $socket;
-    }
-
-    private function readLine($socket, int $length = 1024) : string
-    {
-        $bytes = socket_read($socket, $length, PHP_BINARY_READ);
-        while (strpos($bytes, "\r\n") === false) {
-            $bytes .= socket_read($socket, $length - strlen($bytes), PHP_BINARY_READ);
-        }
-        return $bytes;
-    }
-
-    private function writeLine($socket, string $command, string $json) : string
-    {
-        $buffer = $command . ' ' . $json . "\r\n";
-        socket_write($socket, $buffer, strlen($buffer));
-        $read = $this->readLine($socket);
-        return $read;
-    }
-
-    private function close($socket) : void
-    {
-        socket_close($socket);
-    }
+  /**
+   * @param string $command
+   * @param string $json
+   * @return mixed
+   */
+  private function writeLine(string $command, string $json)
+  {
+    $buffer = $command . ' ' . $json . PHP_EOL;
+    fwrite($this->socket, $buffer);
+    return $this->readLine();
+  }
 }
