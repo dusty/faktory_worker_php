@@ -3,14 +3,9 @@ REFERENCES
   https://github.com/contribsys/faktory_worker_ruby/tree/master/lib/faktory
   https://github.com/contribsys/faktory_worker_go
 
-X make logger optional
 
-X extract parsing the results
-
-X automatic uuid in worker
-
-X automatic id in Job
-
+TODO
+- Retries
 - payload options
   - queue
   - priority
@@ -19,37 +14,39 @@ X automatic id in Job
   - retry
   - backtrace
   - custom { hash }
-
-X pass error message on failure
-  x errType, message, backtrace
-
-X support authentication
-  x from HI connect string
-
-X connect
-  x version 2
-  x wid
-  x hostname
-  x pid
-  x labels (document this)
-
-X implement BEAT every 15 seconds
-  - call quiet or terminate based on results
-
+- Documentation
+- call quiet or terminate based on results of BEAT
 - implement quiet
   - stop fetch
   - call terminate
-
 - implement terminate
   - time for cleanup (25 sec)
   - send FAIL for any remaining jobs
   - call END
-
-- implement INFO
-
-- implement END
-
-- trap signals?
+- check return on commands (OK)
+- trap signals
   SIGTERM - stop
   SIGTSTP - quiet
   SIGINT  - stop
+
+
+DONE
+- make logger optional
+- extract parsing the results
+- automatic uuid in worker
+- automatic id in Job
+- pass error message on failure
+  - errType
+  - message
+  - backtrace
+- support authentication
+- connect
+  - version 2
+  - wid
+  - hostname
+  - pid
+  - labels (document this)
+- implement BEAT every 15 seconds
+- implement FLUSH
+- implement INFO
+- implement END (inside close)

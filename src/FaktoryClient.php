@@ -40,11 +40,14 @@ class FaktoryClient
     return ($resp === 'OK') ? null : $resp;
   }
 
+  /**
+   * @return null
+   */
   public function close()
   {
-    if ($this->socket) {
-      @fclose($this->socket);
-    }
+    if (!$this->socket) {return;}
+    $this->write('END');
+    @fclose($this->socket);
   }
 
   /**
@@ -56,6 +59,7 @@ class FaktoryClient
     if ($err instanceof Exception) {
       $payload['errType'] = get_class($err);
       $payload['message'] = $err->getMessage();
+      $payload['backtrace'] = $err->getTrace();
     } else {
       $payload['errType'] = 'Error';
       $payload['message'] = (string) $err;
@@ -72,12 +76,23 @@ class FaktoryClient
     return $this->write('FETCH', implode(' ', $queues));
   }
 
+  public function flush()
+  {
+    $this->write('FLUSH');
+  }
+
+  public function info()
+  {
+    $this->write('INFO');
+  }
+
   /**
    * @param FaktoryJob $job
    */
   public function push(FaktoryJob $job)
   {
     $this->write('PUSH', json_encode($job));
+    return $job->id;
   }
 
   /**
