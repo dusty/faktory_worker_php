@@ -41,11 +41,14 @@ class FaktoryWorker
    * @param FaktoryClient $client
    * @param LoggerInterface $logger
    */
-  public function __construct(FaktoryClient $client, LoggerInterface $logger)
+  public function __construct(FaktoryClient $client, LoggerInterface $logger = null)
   {
     $this->client = $client;
-    $this->logger = $logger;
-    $this->client->connect();
+    if (empty($logger)) {
+      $this->logger = new \Psr\Log\NullLogger();
+    } else {
+      $this->logger = $logger;
+    }
   }
 
   /**
@@ -97,7 +100,7 @@ class FaktoryWorker
             call_user_func($callable, $job);
             $this->client->ack($job['jid']);
           } catch (\Exception $e) {
-            $this->client->fail($job['jid']);
+            $this->client->fail($job['jid'], $e);
           } finally {
             exit(0);
           }

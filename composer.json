@@ -9,7 +9,8 @@
     "require": {
         "php": "^7.1",
         "ext-pcntl": "*",
-        "psr/log": "^1.0"
+        "psr/log": "^1.0",
+        "ramsey/uuid": "^3.7"
     },
     "autoload": {
         "psr-4": {

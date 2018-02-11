@@ -2,8 +2,14 @@
 
 namespace BaseKit\Faktory;
 
+use Ramsey\Uuid\Uuid;
+
 class FaktoryClient
 {
+  const EOL = "\r\n";
+
+  const VERSION = 2;
+
   /**
    * @var socket
    */
@@ -13,10 +19,11 @@ class FaktoryClient
    * @param string $url
    * @param int $timeout
    */
-  public function __construct(string $url, int $timeout = 5)
+  public function __construct(string $url, int $timeout = 5, $labels = [])
   {
-    $this->timeout = $timeout;
-    $this->url = parse_url($url);
+    $this->labels = $labels;
+    $this->wid = Uuid::uuid4();
+    $this->connect(parse_url($url), $timeout);
   }
 
   /**
@@ -24,47 +31,36 @@ class FaktoryClient
    */
   public function ack(string $jobId)
   {
-    $this->writeLine('ACK', json_encode(['jid' => $jobId]));
+    $this->write('ACK', json_encode(['jid' => $jobId]));
   }
 
   public function beat()
   {
-    $response = $this->writeLine('BEAT', '{"wid":"foo"}');
-    return (strpos($response, 0, 3) === '+OK') ? null : json_decode($response);
+    $resp = $this->write('BEAT', json_encode(['wid' => $this->wid]));
+    return ($resp === 'OK') ? null : $resp;
   }
 
   public function close()
   {
-    if ($this->socket) {@fclose($this->socket);}
-  }
-
-  /**
-   * @return mixed
-   */
-  public function connect()
-  {
-    if ($this->socket) {return;}
-    $conn = $this->url['scheme'] . '://' . $this->url['host'] . ':' . $this->url['port'];
-    $this->socket = stream_socket_client($conn, $errno, $errstr, $this->timeout, STREAM_CLIENT_CONNECT);
-    if (!$this->socket) {
-      throw new \Exception("Connect Error: $errno - $errstr");
+    if ($this->socket) {
+      @fclose($this->socket);
     }
-
-    $response = $this->readLine();
-    if (substr($response, 0, 3) !== '+HI') {
-      throw new \Exception('Hi not received :(');
-    }
-
-    $params = json_decode(trim(substr($response, 4, strpos($response, PHP_EOL))));
-    $this->login($params);
   }
 
   /**
    * @param string $jobId
    */
-  public function fail(string $jobId)
+  public function fail(string $jobId, $err = '')
   {
-    $this->writeLine('FAIL', json_encode(['jid' => $jobId]));
+    $payload = ['jid' => $jobId];
+    if ($err instanceof Exception) {
+      $payload['errType'] = get_class($err);
+      $payload['message'] = $err->getMessage();
+    } else {
+      $payload['errType'] = 'Error';
+      $payload['message'] = (string) $err;
+    }
+    $this->write('FAIL', json_encode($payload));
   }
 
   /**
@@ -73,14 +69,7 @@ class FaktoryClient
    */
   public function fetch(array $queues)
   {
-    $response = $this->writeLine('FETCH', implode(' ', $queues));
-    $char = $response[0];
-    if ($char === '$') {
-      $count = trim(substr($response, 1, strpos($response, PHP_EOL)));
-      if ($count < 1) {return null;}
-      $data = $this->readLine();
-      return json_decode($data, true);
-    }
+    return $this->write('FETCH', implode(' ', $queues));
   }
 
   /**
@@ -88,34 +77,111 @@ class FaktoryClient
    */
   public function push(FaktoryJob $job)
   {
-    $this->writeLine('PUSH', json_encode($job));
+    $this->write('PUSH', json_encode($job));
   }
 
   /**
-   * @param array $params
    * @return mixed
    */
-  private function login($params = [])
+  private function connect($url, $timeout)
   {
-    // DO SOMETHING WITH PARAMS (eg: Authenticate)
-    $resp = $this->writeLine('HELLO', '{"wid":"foo","v":2}');
-    // validate data
-    if (substr($resp, 0, 3) !== '+OK') {
+    $host = $url['host'];
+    $port = $url['port'];
+    $this->socket = stream_socket_client("tcp://${host}:$port}", $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
+
+    if (!$this->socket) {
+      throw new \Exception("Connection Error: $errstr");
+    }
+
+    $resp = $this->read();
+
+    if (substr($resp, 0, 2) !== 'HI') {
+      throw new \Exception('Hi not received :(');
+    }
+
+    // decode the rest of the HI message
+    $hi = json_decode(trim(substr($resp, 3)), true);
+
+    $server = (int) $hi['v'];
+    $client = self::VERSION;
+
+    if ($server > $client) {
+      echo "WARNING: Faktory Protocol Mismatch. Upgrade recommended\n";
+      echo "  Server Version: $server\n  Client Version: $client\n\n";
+    }
+
+    $nonce = (string) @$hi['s'];
+    $iterations = (int) @$hi['i'];
+    $password = (string) @$url['pass'];
+
+    $pwdhash = $this->hashPassword($nonce, $iterations, $password);
+
+    // do something if auth is required
+    $payload = [
+      'wid' => $this->wid,
+      'v' => self::VERSION,
+      'hostname' => gethostname(),
+      'pid' => getmypid(),
+      'labels' => $this->labels,
+    ];
+    if (!empty($pwdhash)) {
+      $payload['pwdhash'] = $pwdhash;
+    }
+
+    $resp = $this->write('HELLO', json_encode($payload));
+
+    if ($resp !== 'OK') {
       throw new \Exception('OK Not Received');
+    }
+  }
+
+  /**
+   * @return mixed
+   */
+  private function fgets()
+  {
+    $resp = '';
+    while (!strpos($resp, self::EOL)) {
+      $resp .= fgets($this->socket, 4096);
     }
     return $resp;
   }
 
   /**
+   * @param $nonce
+   * @param $iterations
+   * @param $password
+   */
+  private function hashPassword(string $nonce, int $iterations, string $password = null)
+  {
+    if (empty($password)) {
+      throw new \Exception('Password Required');
+    }
+    $data = $password . $nonce;
+    for ($i = 0; $i < $iterations; $i++) {
+      $data = hash('sha256', $data, true);
+    }
+    return bin2hex($data);
+  }
+
+  /**
    * @return mixed
    */
-  private function readLine()
+  private function read()
   {
-    $bytes = '';
-    while (!strpos($bytes, PHP_EOL)) {
-      $bytes .= fgets($this->socket, 1024);
+    $resp = $this->fgets();
+    $chr = substr($resp, 0, 1);
+    if ($chr === '+') {
+      return trim(substr($resp, 1));
+    } else if ($chr === '$') {
+      $count = trim(substr($resp, 1));
+      if ($count < 1) {return null;}
+      return json_decode($this->fgets(), true);
+    } else if ($chr === '-') {
+      throw new \Exception(substr($resp, 1));
+    } else {
+      throw new \Exception(trim($resp));
     }
-    return $bytes;
   }
 
   /**
@@ -123,10 +189,10 @@ class FaktoryClient
    * @param string $json
    * @return mixed
    */
-  private function writeLine(string $command, string $json)
+  private function write(string $command, string $json)
   {
-    $buffer = $command . ' ' . $json . PHP_EOL;
+    $buffer = $command . ' ' . $json . self::EOL;
     fwrite($this->socket, $buffer);
-    return $this->readLine();
+    return $this->read();
   }
 }
