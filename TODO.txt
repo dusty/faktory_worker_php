@@ -14,23 +14,20 @@ TODO
   - retry
   - backtrace
   - custom { hash }
-- Documentation
 - call quiet or terminate based on results of BEAT
-- implement quiet
-  - stop fetch
-  - call terminate
 - implement terminate
   - time for cleanup (25 sec)
   - send FAIL for any remaining jobs
   - call END
 - check return on commands (OK)
-- trap signals
-  SIGTERM - stop
-  SIGTSTP - quiet
-  SIGINT  - stop
-
+- Documentation
 
 DONE
+- implement quiet
+  - stop fetch
+- trap signals
+  - SIGTSTP - quiet
+  - SIGINT, SIGTERM - terminate
 - make logger optional
 - extract parsing the results
 - automatic uuid in worker

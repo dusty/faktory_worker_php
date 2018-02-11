@@ -35,15 +35,21 @@ class FaktoryWorker
   /**
    * @var bool
    */
-  private $stop = false;
+  private $quiet = false;
+
+  /**
+   * @var bool
+   */
+  private $working = false;
 
   /**
    * @param FaktoryClient $client
    * @param LoggerInterface $logger
    */
-  public function __construct(FaktoryClient $client, LoggerInterface $logger = null)
+  public function __construct(FaktoryClient $client, array $queues, LoggerInterface $logger = null)
   {
     $this->client = $client;
+    $this->queues = $queues;
     if (empty($logger)) {
       $this->logger = new \Psr\Log\NullLogger();
     } else {
@@ -66,55 +72,64 @@ class FaktoryWorker
   public function run(bool $daemonize = false): void
   {
     pcntl_async_signals(true);
-
-    pcntl_signal(SIGTERM, function ($signo) {
-      exit(0);
-    });
-
-    pcntl_signal(SIGINT, function ($signo) {
-      exit(0);
-    });
-
+    pcntl_signal(SIGTERM, function ($signo) {$this->terminate();});
+    pcntl_signal(SIGTSTP, function ($signo) {$this->quiet();});
+    pcntl_signal(SIGINT, function ($signo) {$this->terminate();});
     do {
-      if (!$this->lastBeat || ($this->lastBeat + 15) < time()) {
-        $response = $this->client->beat();
-        $this->lastBeat = time();
-      }
-
-      $job = $this->client->fetch($this->queues);
-
-      if ($job !== null) {
-        $this->logger->debug($job['jid']);
-
-        $callable = $this->jobTypes[$job['jobtype']];
-
-        $pid = pcntl_fork();
-        if ($pid === -1) {
-          throw new \Exception('Could not fork');
-        }
-
-        if ($pid > 0) {
-          pcntl_wait($status);
-        } else {
-          try {
-            call_user_func($callable, $job);
-            $this->client->ack($job['jid']);
-          } catch (\Exception $e) {
-            $this->client->fail($job['jid'], $e);
-          } finally {
-            exit(0);
-          }
-        }
-      }
+      $this->sendBeat();
+      $this->runJob();
       usleep(100);
-    } while ($daemonize && !$this->stop);
+    } while ($daemonize);
+  }
+
+  private function quiet()
+  {
+    $this->quiet = true;
+    $this->logger->debug('Received QUIET command. Stopping FETCH.');
   }
 
   /**
-   * @param array $queues
+   * @return null
    */
-  public function setQueues(array $queues): void
+  private function runJob()
   {
-    $this->queues = $queues;
+    if ($this->quiet) {return;}
+    $job = $this->client->fetch($this->queues);
+    if (empty($job)) {return;}
+
+    $this->logger->debug($job['jid']);
+    $this->working = true;
+    $callable = $this->jobTypes[$job['jobtype']];
+    try {
+      call_user_func($callable, $job);
+      $this->client->ack($job['jid']);
+    } catch (\Exception $e) {
+      $this->client->fail($job['jid'], $e);
+    } finally {
+      $this->working = false;
+    }
+  }
+
+  /**
+   * TODO
+   * Handle a response of quiet or terminate
+   */
+  private function sendBeat()
+  {
+    if (!$this->lastBeat || ($this->lastBeat + 15) < time()) {
+      $response = $this->client->beat();
+      $this->lastBeat = time();
+    }
+  }
+
+  /**
+   * TODO
+   * Wait 25 seconds, send a fail for if still pending, exit.
+   */
+  private function terminate()
+  {
+    $this->logger->debug('Received TERMINATE command. Shutting down.');
+    $this->client->close();
+    exit(0);
   }
 }

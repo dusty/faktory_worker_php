@@ -46,7 +46,7 @@ class FaktoryClient
   public function close()
   {
     if (!$this->socket) {return;}
-    $this->write('END');
+    fwrite($this->socket, 'END');
     @fclose($this->socket);
   }
 
@@ -92,7 +92,6 @@ class FaktoryClient
   public function push(FaktoryJob $job)
   {
     $this->write('PUSH', json_encode($job));
-    return $job->id;
   }
 
   /**
@@ -201,12 +200,12 @@ class FaktoryClient
 
   /**
    * @param string $command
-   * @param string $json
+   * @param string $payload
    * @return mixed
    */
-  private function write(string $command, string $json)
+  private function write(string $command, string $payload = null)
   {
-    $buffer = $command . ' ' . $json . self::EOL;
+    $buffer = $command . ' ' . $payload . self::EOL;
     fwrite($this->socket, $buffer);
     return $this->read();
   }
