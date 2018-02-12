@@ -49,6 +49,7 @@ class FaktoryWorker
 
   /**
    * @param FaktoryClient $client
+   * @param array $queues
    * @param LoggerInterface $logger
    */
   public function __construct(FaktoryClient $client, array $queues = ['default'], LoggerInterface $logger = null)
@@ -176,9 +177,6 @@ class FaktoryWorker
     }
   }
 
-  /**
-   * @param array $args
-   */
   private function setQuiet()
   {
     $this->isQuiet = true;

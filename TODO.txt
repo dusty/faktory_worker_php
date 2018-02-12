@@ -5,9 +5,9 @@ REFERENCES
 
 
 TODO
-- check return on commands (OK)
-- Retries
-- Documentation
+- check for required return on commands (OK)
+- retries
+- documentation
 
 DONE
 - payload options
@@ -19,6 +19,7 @@ DONE
   - backtrace
   - custom { hash }
 - implement terminate
+  - apply timeout
   - send FAIL for any remaining jobs
   - call END
 - implement quiet

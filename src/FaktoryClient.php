@@ -11,7 +11,7 @@ class FaktoryClient
   const VERSION = 2;
 
   /**
-   * @var mixed
+   * @var array
    */
   private $labels;
 
@@ -32,6 +32,7 @@ class FaktoryClient
 
   /**
    * @param string $url
+   * @param array $labels
    * @param int $timeout
    */
   public function __construct(string $url, $labels = [], int $timeout = 5)
@@ -69,6 +70,7 @@ class FaktoryClient
 
   /**
    * @param string $jobId
+   * @param $err
    */
   public function fail(string $jobId, $err = '')
   {
