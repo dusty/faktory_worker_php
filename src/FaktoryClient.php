@@ -11,6 +11,11 @@ class FaktoryClient
   const VERSION = 2;
 
   /**
+   * @var mixed
+   */
+  private $labels;
+
+  /**
    * @var socket
    */
   private $socket;
@@ -93,6 +98,17 @@ class FaktoryClient
     $this->write('FLUSH');
   }
 
+  /**
+   * @param $payload
+   */
+  public function hello($payload)
+  {
+    $resp = $this->write('HELLO', json_encode($payload));
+    if ($resp !== 'OK') {
+      throw new \Exception('OK Not Received');
+    }
+  }
+
   public function info()
   {
     $this->write('INFO');
@@ -119,7 +135,7 @@ class FaktoryClient
    */
   public function setTimeout(int $timeout = 5)
   {
-    $this->setTimeout($timeout);
+    $this->timeout = $timeout;
   }
 
   /**
@@ -170,11 +186,7 @@ class FaktoryClient
       $payload['pwdhash'] = $pwdhash;
     }
 
-    $resp = $this->write('HELLO', json_encode($payload));
-
-    if ($resp !== 'OK') {
-      throw new \Exception('OK Not Received');
-    }
+    $this->hello($payload);
   }
 
   /**
@@ -196,6 +208,7 @@ class FaktoryClient
    */
   private function hashPassword(string $nonce, int $iterations, string $password = null)
   {
+    if (empty($nonce) || empty($iterations)) {return;}
     if (empty($password)) {
       throw new \Exception('Password Required');
     }

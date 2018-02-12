@@ -20,6 +20,11 @@ class FaktoryWorker
   /**
    * @var bool
    */
+  private $isTerminated = false;
+
+  /**
+   * @var bool
+   */
   private $isWorking = false;
 
   /**
@@ -54,15 +59,6 @@ class FaktoryWorker
   }
 
   /**
-   * @param array $args
-   */
-  public function quiet()
-  {
-    $this->isQuiet = true;
-    $this->logger->info('QUIET: stopping fetch');
-  }
-
-  /**
    * @param string $jobType
    * @param $callable
    */
@@ -77,11 +73,13 @@ class FaktoryWorker
   public function run(bool $daemonize = false): void
   {
     pcntl_async_signals(true);
-    pcntl_signal(SIGTERM, function ($signo) {$this->terminate();});
-    pcntl_signal(SIGTSTP, function ($signo) {$this->quiet();});
-    pcntl_signal(SIGINT, function ($signo) {$this->terminate();});
+    pcntl_signal(SIGTSTP, function () {$this->setQuiet();});
+    pcntl_signal(SIGINT, function () {$this->setTerminate();});
+    pcntl_signal(SIGTERM, function () {$this->setTerminate();});
+    pcntl_signal(SIGALRM, function () {$this->close();});
     do {
       $this->sendBeat();
+      $this->checkIsTerminated();
       $this->runJob();
       usleep(100);
     } while ($daemonize);
@@ -108,14 +106,27 @@ class FaktoryWorker
   }
 
   /**
-   * If there is a running worker here, its from a kill signal
+   * @return null
    */
-  public function terminate()
+  private function checkIsTerminated()
   {
-    $this->logger->info('TERMINATE: shutting down worker');
+    $timeout = $this->isTerminated ? 25 : 0;
+    pcntl_alarm($timeout);
+    if (!$this->isTerminated) {return;}
     if ($this->isWorking) {
+      $this->logger->warning('TERMINATE: waiting 25 seconds for pending job');
+    } else {
+      $this->close();
+    }
+  }
+
+  private function close()
+  {
+    if ($this->isWorking) {
+      $this->logger->error('FAIL', ['jid' => $this->isWorking]);
       $this->client->fail($this->isWorking, 'Forced Termination');
     }
+    $this->logger->debug('END');
     $this->client->close();
     exit(0);
   }
@@ -158,10 +169,26 @@ class FaktoryWorker
       $this->logger->debug('BEAT', $resp ?: []);
       if (!isset($resp['state'])) {return;}
       if ($resp['state'] === 'quiet') {
-        $this->quiet();
+        $this->setQuiet();
       } else if ($resp['state'] === 'terminate') {
-        $this->terminate();
+        $this->setTerminate();
       }
     }
+  }
+
+  /**
+   * @param array $args
+   */
+  private function setQuiet()
+  {
+    $this->isQuiet = true;
+    $this->logger->warning('QUIET: stopping fetch');
+  }
+
+  private function setTerminate()
+  {
+    $this->isTerminated = true;
+    $this->logger->warning('TERMINATE: shutting down');
+    $this->checkIsTerminated();
   }
 }
