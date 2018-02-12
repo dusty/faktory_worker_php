@@ -6,7 +6,7 @@ use BaseKit\Faktory\FaktoryJob;
 
 $COUNT = 1000;
 
-$client = new FaktoryClient('tcp://me:pass@localhost:7419');
+$client = new FaktoryClient('tcp://me:pass@localhost:7419', ['default'], 5);
 
 for ($i = 0; $i < $COUNT; $i++) {
   $data = ['time' => new DateTime()];
@@ -19,3 +19,4 @@ for ($i = 0; $i < $COUNT; $i++) {
   // $job->setBacktrace(0)
   $client->push($job);
 }
+$client->close();

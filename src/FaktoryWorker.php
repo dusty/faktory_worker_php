@@ -46,15 +46,20 @@ class FaktoryWorker
    * @param FaktoryClient $client
    * @param LoggerInterface $logger
    */
-  public function __construct(FaktoryClient $client, array $queues, LoggerInterface $logger = null)
+  public function __construct(FaktoryClient $client, array $queues = ['default'], LoggerInterface $logger = null)
   {
     $this->client = $client;
-    $this->queues = $queues;
-    if (empty($logger)) {
-      $this->logger = new \Psr\Log\NullLogger();
-    } else {
-      $this->logger = $logger;
-    }
+    $this->setQueues($queues);
+    $this->setLogger($logger);
+  }
+
+  /**
+   * @param array $args
+   */
+  public function quiet()
+  {
+    $this->isQuiet = true;
+    $this->logger->info('QUIET: stopping fetch');
   }
 
   /**
@@ -83,12 +88,36 @@ class FaktoryWorker
   }
 
   /**
-   * @param array $args
+   * @param LoggerInterface $logger
    */
-  private function quiet()
+  public function setLogger(LoggerInterface $logger = null)
   {
-    $this->isQuiet = true;
-    $this->logger->info('QUIET: stopping fetch');
+    if (empty($logger)) {
+      $this->logger = new \Psr\Log\NullLogger();
+    } else {
+      $this->logger = $logger;
+    }
+  }
+
+  /**
+   * @param array $queues
+   */
+  public function setQueues(array $queues = ['default'])
+  {
+    $this->queues = $queues;
+  }
+
+  /**
+   * If there is a running worker here, its from a kill signal
+   */
+  public function terminate()
+  {
+    $this->logger->info('TERMINATE: shutting down worker');
+    if ($this->isWorking) {
+      $this->client->fail($this->isWorking, 'Forced Termination');
+    }
+    $this->client->close();
+    exit(0);
   }
 
   /**
@@ -134,18 +163,5 @@ class FaktoryWorker
         $this->terminate();
       }
     }
-  }
-
-  /**
-   * If there is a running worker here, its from a kill signal
-   */
-  private function terminate()
-  {
-    $this->logger->info('TERMINATE: shutting down worker');
-    if ($this->isWorking) {
-      $this->client->fail($this->isWorking, 'Forced Termination');
-    }
-    $this->client->close();
-    exit(0);
   }
 }

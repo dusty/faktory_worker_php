@@ -16,14 +16,26 @@ class FaktoryClient
   private $socket;
 
   /**
+   * @var int
+   */
+  private $timeout;
+
+  /**
+   * @var string
+   */
+  private $url;
+
+  /**
    * @param string $url
    * @param int $timeout
    */
-  public function __construct(string $url, int $timeout = 5, $labels = [])
+  public function __construct(string $url, $labels = [], int $timeout = 5)
   {
-    $this->labels = $labels;
     $this->wid = Uuid::uuid4();
-    $this->connect(parse_url($url), $timeout);
+    $this->url = parse_url($url);
+    $this->setLabels($labels);
+    $this->setTimeout($timeout);
+    $this->connect();
   }
 
   /**
@@ -95,13 +107,29 @@ class FaktoryClient
   }
 
   /**
+   * @param array $labels
+   */
+  public function setLabels(array $labels = [])
+  {
+    $this->labels = $labels;
+  }
+
+  /**
+   * @param int $timeout
+   */
+  public function setTimeout(int $timeout = 5)
+  {
+    $this->setTimeout($timeout);
+  }
+
+  /**
    * @return mixed
    */
-  private function connect($url, $timeout)
+  private function connect()
   {
-    $host = $url['host'];
-    $port = $url['port'];
-    $this->socket = stream_socket_client("tcp://${host}:$port}", $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
+    $host = $this->url['host'];
+    $port = $this->url['port'];
+    $this->socket = stream_socket_client("tcp://${host}:$port}", $errno, $errstr, $this->timeout, STREAM_CLIENT_CONNECT);
 
     if (!$this->socket) {
       throw new \Exception("Connection Error: $errstr");
