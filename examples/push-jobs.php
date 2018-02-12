@@ -11,5 +11,11 @@ $client = new FaktoryClient('tcp://me:pass@localhost:7419');
 for ($i = 0; $i < $COUNT; $i++) {
   $data = ['time' => new DateTime()];
   $job = new FaktoryJob('MyJob', [$data]);
+  // $job->setQueue('default');
+  // $job->setPriority(5);
+  // $job->setReserve(1800);
+  // $job->setAt(new \DateTime());
+  // $job->setRetry(25);
+  // $job->setBacktrace(0)
   $client->push($job);
 }

@@ -13,6 +13,16 @@ class FaktoryWorker
   private $client;
 
   /**
+   * @var bool
+   */
+  private $isQuiet = false;
+
+  /**
+   * @var bool
+   */
+  private $isWorking = false;
+
+  /**
    * @var array
    */
   private $jobTypes = [];
@@ -31,16 +41,6 @@ class FaktoryWorker
    * @var array
    */
   private $queues = [];
-
-  /**
-   * @var bool
-   */
-  private $quiet = false;
-
-  /**
-   * @var bool
-   */
-  private $working = false;
 
   /**
    * @param FaktoryClient $client
@@ -82,10 +82,13 @@ class FaktoryWorker
     } while ($daemonize);
   }
 
+  /**
+   * @param array $args
+   */
   private function quiet()
   {
-    $this->quiet = true;
-    $this->logger->debug('Received QUIET command. Stopping FETCH.');
+    $this->isQuiet = true;
+    $this->logger->info('QUIET: stopping fetch');
   }
 
   /**
@@ -93,42 +96,55 @@ class FaktoryWorker
    */
   private function runJob()
   {
-    if ($this->quiet) {return;}
+    if ($this->isQuiet) {return;}
     $job = $this->client->fetch($this->queues);
     if (empty($job)) {return;}
-
-    $this->logger->debug($job['jid']);
-    $this->working = true;
+    $this->isWorking = $job['jid'];
     $callable = $this->jobTypes[$job['jobtype']];
+    $this->logger->debug('FETCH', $job);
     try {
       call_user_func($callable, $job);
       $this->client->ack($job['jid']);
+      $this->logger->info('ACK', [
+        'jobid' => $job['jid'], 'jobtype' => $job['jobtype'],
+      ]);
     } catch (\Exception $e) {
       $this->client->fail($job['jid'], $e);
+      $this->logger->error('FAIL', [
+        'jobid' => $job['jid'], 'jobtype' => $job['jobtype'], 'error' => (string) $e,
+      ]);
     } finally {
-      $this->working = false;
+      $this->isWorking = false;
     }
   }
 
   /**
-   * TODO
-   * Handle a response of quiet or terminate
+   * @return null
    */
   private function sendBeat()
   {
     if (!$this->lastBeat || ($this->lastBeat + 15) < time()) {
-      $response = $this->client->beat();
+      $resp = $this->client->beat();
       $this->lastBeat = time();
+      $this->logger->debug('BEAT', $resp ?: []);
+      if (!isset($resp['state'])) {return;}
+      if ($resp['state'] === 'quiet') {
+        $this->quiet();
+      } else if ($resp['state'] === 'terminate') {
+        $this->terminate();
+      }
     }
   }
 
   /**
-   * TODO
-   * Wait 25 seconds, send a fail for if still pending, exit.
+   * If there is a running worker here, its from a kill signal
    */
   private function terminate()
   {
-    $this->logger->debug('Received TERMINATE command. Shutting down.');
+    $this->logger->info('TERMINATE: shutting down worker');
+    if ($this->isWorking) {
+      $this->client->fail($this->isWorking, 'Forced Termination');
+    }
     $this->client->close();
     exit(0);
   }

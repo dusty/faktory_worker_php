@@ -5,7 +5,11 @@ REFERENCES
 
 
 TODO
+- check return on commands (OK)
 - Retries
+- Documentation
+
+DONE
 - payload options
   - queue
   - priority
@@ -14,17 +18,12 @@ TODO
   - retry
   - backtrace
   - custom { hash }
-- call quiet or terminate based on results of BEAT
 - implement terminate
-  - time for cleanup (25 sec)
   - send FAIL for any remaining jobs
   - call END
-- check return on commands (OK)
-- Documentation
-
-DONE
 - implement quiet
   - stop fetch
+- call quiet or terminate based on results of BEAT
 - trap signals
   - SIGTSTP - quiet
   - SIGINT, SIGTERM - terminate
