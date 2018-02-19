@@ -73,18 +73,33 @@ class FaktoryJob implements \JsonSerializable
    */
   public function jsonSerialize(): array
   {
-    return [
+    $arr = [
       'jid' => $this->id,
       'jobtype' => $this->type,
-      'args' => $this->args,
-      'queue' => $this->queue,
-      'priority' => $this->priority,
-      'reserve_for' => $this->reserve,
-      'at' => $this->at ? $this->at->format(\DateTime::RFC3339_EXTENDED) : null,
-      'retry' => $this->retry,
-      'backtrace' => $this->backtrace,
-      'custom' => $this->custom,
+      'args' => $this->args ?: [],
     ];
+    if (!empty($this->queue)) {
+      $arr['queue'] = $this->queue;
+    }
+    if (is_numeric($this->priority)) {
+      $arr['priority'] = $this->priority;
+    }
+    if (is_numeric($this->reserve)) {
+      $arr['reserve_for'] = $this->reserve;
+    }
+    if (is_a($this->at, 'DateTime')) {
+      $arr['at'] = $this->at->format(\DateTime::RFC3339_EXTENDED);
+    }
+    if (is_numeric($this->retry)) {
+      $arr['retry'] = $this->retry;
+    }
+    if (is_numeric($this->backtrace)) {
+      $arr['backtrace'] = $this->backtrace;
+    }
+    if (!empty($this->custom)) {
+      $arr['custom'] = $this->custom;
+    }
+    return $arr;
   }
 
   /**

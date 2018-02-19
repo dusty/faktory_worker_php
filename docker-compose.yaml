@@ -5,10 +5,8 @@ services:
     volumes:
       - .:/opt/php_faktory_worker
     working_dir: /opt/php_faktory_worker
-    env_file: .env
   faktory:
     image: contribsys/faktory
     ports:
       - "7419:7419"
       - "7420:7420"
-    command: ["-b", "0.0.0.0:7419", "-no-tls"]
