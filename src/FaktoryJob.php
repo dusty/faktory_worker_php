@@ -123,6 +123,9 @@ class FaktoryJob implements \JsonSerializable
    */
   public function setBacktrace(int $backtrace)
   {
+    if ($backtrace < 0) {
+      throw new \Exception('Backtrace must be 0 or greater');
+    }
     $this->backtrace = $backtrace;
   }
 
@@ -140,7 +143,9 @@ class FaktoryJob implements \JsonSerializable
    */
   public function setPriority(int $priority)
   {
-    if ($priority > 0 || $priority > 9) {return;}
+    if ($priority < 1 || $priority > 9) {
+      throw new \Exception('Priority must be between 1 and 9');
+    }
     $this->priority = $priority;
   }
 
@@ -160,7 +165,9 @@ class FaktoryJob implements \JsonSerializable
    */
   public function setReserve(int $reserve)
   {
-    if ($reserve < 60) {return;}
+    if ($reserve < 60) {
+      throw new \Exception('Reserve must be 60 or greater');
+    }
     $this->reserve = $reserve;
   }
 
@@ -169,6 +176,9 @@ class FaktoryJob implements \JsonSerializable
    */
   public function setRetry(int $retry)
   {
+    if ($retry < -1) {
+      throw new \Exception('Retry must be -1 or greater');
+    }
     $this->retry = $retry;
   }
 }
