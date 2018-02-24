@@ -35,7 +35,7 @@ class FaktoryClient
    * @param array $labels
    * @param int $timeout
    */
-  public function __construct(string $url, $labels = [], int $timeout = 5)
+  public function __construct(string $url, array $labels = [], int $timeout = 5)
   {
     $this->wid = Uuid::uuid4();
     $this->url = parse_url($url);
@@ -111,9 +111,12 @@ class FaktoryClient
     }
   }
 
+  /**
+   * @return mixed
+   */
   public function info()
   {
-    $this->write('INFO');
+    return $this->write('INFO');
   }
 
   /**

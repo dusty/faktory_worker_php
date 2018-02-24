@@ -5,6 +5,7 @@ REFERENCES
 
 
 TODO
+- no wid for non-worker connections
 - check for required return on commands (OK)
 - retries
 - documentation
