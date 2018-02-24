@@ -35,12 +35,12 @@ class FaktoryClient
    * @param array $labels
    * @param int $timeout
    */
-  public function __construct(string $url, array $labels = [], int $timeout = 5)
+  public function __construct(string $url = 'tcp://localhost:7419', array $labels = [], int $timeout = 5)
   {
     $this->wid = Uuid::uuid4();
     $this->url = parse_url($url);
-    $this->setLabels($labels);
-    $this->setTimeout($timeout);
+    $this->labels = $labels;
+    $this->timeout = $timeout;
     $this->connect();
   }
 
@@ -125,22 +125,6 @@ class FaktoryClient
   public function push(FaktoryJob $job)
   {
     $this->write('PUSH', json_encode($job));
-  }
-
-  /**
-   * @param array $labels
-   */
-  public function setLabels(array $labels = [])
-  {
-    $this->labels = $labels;
-  }
-
-  /**
-   * @param int $timeout
-   */
-  public function setTimeout(int $timeout = 5)
-  {
-    $this->timeout = $timeout;
   }
 
   /**

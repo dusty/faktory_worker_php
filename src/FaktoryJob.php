@@ -76,7 +76,7 @@ class FaktoryJob implements \JsonSerializable
     $arr = [
       'jid' => $this->id,
       'jobtype' => $this->type,
-      'args' => $this->args ?: [],
+      'args' => $this->args ? [$this->args] : [],
     ];
     if (!empty($this->queue)) {
       $arr['queue'] = $this->queue;

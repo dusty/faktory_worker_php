@@ -3,8 +3,13 @@ REFERENCES
   https://github.com/contribsys/faktory_worker_ruby/tree/master/lib/faktory
   https://github.com/contribsys/faktory_worker_go
 
+NOTES
+- job.failure.retry_count shows number of tries
 
 TODO
+- move connect to its own
+  + call connect within worker
+- setup constructors better
 - no wid for non-worker connections
 - check for required return on commands (OK)
 - retries

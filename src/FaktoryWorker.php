@@ -49,14 +49,13 @@ class FaktoryWorker
 
   /**
    * @param FaktoryClient $client
-   * @param array $queues
    * @param LoggerInterface $logger
    */
-  public function __construct(FaktoryClient $client, array $queues = ['default'], LoggerInterface $logger = null)
+  public function __construct(FaktoryClient $client, LoggerInterface $logger = null)
   {
     $this->client = $client;
-    $this->setQueues($queues);
     $this->setLogger($logger);
+    $this->setQueues();
   }
 
   /**
@@ -140,10 +139,14 @@ class FaktoryWorker
     if ($this->isQuiet) {return;}
     $job = $this->client->fetch($this->queues);
     if (empty($job)) {return;}
-    $this->isWorking = $job['jid'];
-    $callable = $this->jobTypes[$job['jobtype']];
     $this->logger->debug('FETCH', $job);
+    $this->isWorking = $job['jid'];
+    $callable = @$this->jobTypes[$job['jobtype']];
     try {
+      if (empty($callable)) {
+        throw new \Exception("Job Type Not Found: {$job['jobtype']}");
+      }
+      $job['args'] = $job['args'][0];
       call_user_func($callable, $job);
       $this->client->ack($job['jid']);
       $this->logger->info('ACK', [
